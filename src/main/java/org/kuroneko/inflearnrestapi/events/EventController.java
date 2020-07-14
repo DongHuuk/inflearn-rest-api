@@ -2,6 +2,7 @@ package org.kuroneko.inflearnrestapi.events;
 
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.hateoas.server.mvc.WebMvcLinkBuilder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.validation.Errors;
@@ -38,9 +39,14 @@ public class EventController {
         event.freeUpdate();
         event.offlineUpdate();
         Event newEvent = this.eventRepository.save(event);
-        URI uri = linkTo(EventController.class).slash(newEvent.getId()).toUri();
+        WebMvcLinkBuilder selfLink = linkTo(EventController.class).slash(newEvent.getId());
+        URI uri = selfLink.toUri();
 
-        return ResponseEntity.created(uri).body(newEvent);
+        EventResource eventResource = new EventResource(event);
+        eventResource.add(linkTo(EventController.class).withRel("query-events"));
+        eventResource.add(selfLink.withRel("update-event"));
+
+        return ResponseEntity.created(uri).body(eventResource);
     }
 
 
