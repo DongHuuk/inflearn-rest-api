@@ -13,13 +13,4 @@ public class App {
         SpringApplication.run(App.class, args);
     }
 
-    @Bean
-    public ModelMapper modelMapper(){
-        ModelMapper modelMapper = new ModelMapper();
-        modelMapper.getConfiguration()
-                .setDestinationNameTokenizer(NameTokenizers.UNDERSCORE)
-                .setSourceNameTokenizer(NameTokenizers.UNDERSCORE);
-        return modelMapper;
-    }
-
 }

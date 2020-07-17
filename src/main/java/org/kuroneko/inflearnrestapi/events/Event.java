@@ -1,6 +1,7 @@
 package org.kuroneko.inflearnrestapi.events;
 
 import lombok.*;
+import org.kuroneko.inflearnrestapi.account.Account;
 
 import javax.persistence.*;
 import java.time.LocalDateTime;
@@ -25,6 +26,8 @@ public class Event {
     private boolean offline;
     private boolean free;
 
+    @ManyToOne
+    private Account manager;
     @Enumerated(EnumType.STRING)
     private EventStatus eventStatus = EventStatus.DRAFT;
 

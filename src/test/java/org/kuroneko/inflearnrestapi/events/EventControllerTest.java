@@ -2,9 +2,14 @@ package org.kuroneko.inflearnrestapi.events;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.aggregator.ArgumentsAccessor;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.kuroneko.inflearnrestapi.RestDocsConfiguration;
+import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.restdocs.AutoConfigureRestDocs;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -26,8 +31,9 @@ import static org.springframework.restdocs.hypermedia.HypermediaDocumentation.li
 import static org.springframework.restdocs.hypermedia.HypermediaDocumentation.links;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.restdocs.payload.PayloadDocumentation.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.restdocs.request.RequestDocumentation.parameterWithName;
+import static org.springframework.restdocs.request.RequestDocumentation.requestParameters;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -35,7 +41,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ExtendWith(SpringExtension.class)
 @SpringBootTest
 @AutoConfigureMockMvc
-//@TestInstance(TestInstance.Lifecycle.PER_METHOD)
 @AutoConfigureRestDocs
 @Import(RestDocsConfiguration.class)
 @ActiveProfiles("test")
@@ -47,6 +52,8 @@ public class EventControllerTest {
     ObjectMapper objectMapper;
     @Autowired
     EventRepository eventRepository;
+    @Autowired
+    ModelMapper modelMapper;
 
     @Test
     @DisplayName("Event 생성 성공")
@@ -117,6 +124,7 @@ public class EventControllerTest {
                                 fieldWithPath("limitOfEnrollment").description("limitOfEnrollment of new event response"),
                                 fieldWithPath("offline").description("offline of new event response"),
                                 fieldWithPath("free").description("free of new event response"),
+                                fieldWithPath("manager").description("manager of new event response"),
                                 fieldWithPath("eventStatus").description("eventStatus of new event response"),
                                 fieldWithPath("_links.self.href").description("self of new event response"),
                                 fieldWithPath("_links.query-events.href").description("query-events of new event response"),
@@ -127,57 +135,38 @@ public class EventControllerTest {
                 );
     }
 
-    @Test
-    public void updateFree(){
+    @ParameterizedTest
+    @CsvSource({
+            "0,0,true",
+            "100,0,false",
+            "0,100,false"
+    })
+    public void updateFree(ArgumentsAccessor accessor){
         //Given
         Event event = Event.builder()
-                .basePrice(0)
-                .maxPrice(0)
+                .basePrice(accessor.getInteger(0))
+                .maxPrice(accessor.getInteger(1))
                 .build();
         //When
         event.freeUpdate();
         //That
-        assertTrue(event.isFree());
-
-        //Given
-        event = Event.builder()
-                .basePrice(100)
-                .maxPrice(0)
-                .build();
-        //When
-        event.freeUpdate();
-        //That
-        assertFalse(event.isFree());
-
-        //Given
-        event = Event.builder()
-                .basePrice(0)
-                .maxPrice(100)
-                .build();
-        //When
-        event.freeUpdate();
-        //That
-        assertFalse(event.isFree());
+        assertEquals(event.isFree(), accessor.getBoolean(2));
     }
 
-    @Test
-    public void updateLocation(){
+    @ParameterizedTest
+    @CsvSource({
+            "평택역 11시, true",
+            " ,false"
+    })
+    public void updateLocation(ArgumentsAccessor accessor){
         //Given
         Event event = Event.builder()
-                .location("평택역 11시")
+                .location(accessor.getString(0))
                 .build();
         //When
         event.offlineUpdate();
         //That
-        assertTrue(event.isOffline());
-
-        //Given
-        event = Event.builder()
-                .build();
-        //When
-        event.offlineUpdate();
-        //That
-        assertFalse(event.isOffline());
+        assertEquals(event.isOffline(), accessor.getBoolean(1));
     }
 
     @Test
@@ -259,16 +248,209 @@ public class EventControllerTest {
                 .param("sort", "name,DESC"))
                 .andDo(print())
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("page").exists());
+                .andExpect(jsonPath("page").exists())
+                .andExpect(jsonPath("_embedded.eventList[0]._links.self").exists())
+                .andExpect(jsonPath("_links.self").exists())
+                .andExpect(jsonPath("_links.profile").exists())
+                .andDo(document("query-events",
+                        requestParameters(
+                                parameterWithName("page").description("요청 할 페이지 0 부터 시작"),
+                                parameterWithName("size").description("한 페이지에서 요청할 최대 값"),
+                                parameterWithName("sort").description("페이지 정렬 방식")
+                        ),
+                        responseFields(
+                                beneathPath("_embedded.eventList"),
+                                fieldWithPath("id").description("identifier of query event response"),
+                                fieldWithPath("name").description("name of query event response"),
+                                fieldWithPath("description").description("description of query event response"),
+                                fieldWithPath("beginEnrollmentDateTime").description("beginEnrollmentDateTime of query event response"),
+                                fieldWithPath("closeEnrollmentDateTime").description("closeEnrollmentDateTime of query event response"),
+                                fieldWithPath("beginEventDateTime").description("beginEventDateTime of query event response"),
+                                fieldWithPath("endEventDateTime").description("endEventDateTime of query event response"),
+                                fieldWithPath("location").description("location of query event response"),
+                                fieldWithPath("basePrice").description("basePrice of query event response"),
+                                fieldWithPath("maxPrice").description("maxPrice of query event response"),
+                                fieldWithPath("limitOfEnrollment").description("limitOfEnrollment of query event response"),
+                                fieldWithPath("offline").description("offline of query event response"),
+                                fieldWithPath("free").description("free of query event response"),
+                                fieldWithPath("manager").description("manager of query event response"),
+                                fieldWithPath("eventStatus").description("eventStatus of query event response"),
+                                fieldWithPath("_links.self.href").description("self of query event response")
+                        ),
+                        responseFields(
+                                beneathPath("page"),
+                                fieldWithPath("size").description("한 페이지내에서 표시 가능한 속성의 최대 갯수"),
+                                fieldWithPath("totalElements").description("속성의 최대 갯수"),
+                                fieldWithPath("totalPages").description("총 페이지"),
+                                fieldWithPath("number").description("현재 페이지")
+                        ),
+                        links(
+                                linkWithRel("first").description("첫 페이지"),
+                                linkWithRel("next").description("다음 페이지"),
+                                linkWithRel("self").description("현재 페이지"),
+                                linkWithRel("prev").description("이전 페이지"),
+                                linkWithRel("last").description("마지막 페이지"),
+                                linkWithRel("profile").description("profile to link")
+
+                        )
+                    ));
 
     }
 
-    private void generateEvent(int index){
+    @Test
+    @DisplayName("이벤트 한개 조회")
+    public void queryEvent() throws Exception{
+        //Given
+        Event event = this.generateEvent(100);
+
+        //When
+        this.mockMvc.perform(get("/api/events/{id}", event.getId()))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("name").exists())
+                .andExpect(jsonPath("id").exists())
+                .andExpect(jsonPath("_links.self").exists())
+                .andExpect(jsonPath("_links.profile").exists())
+                .andDo(document("get-an-event"));
+    }
+
+    @Test
+    @DisplayName("없는 이벤트를 조회했을 경우 404응답")
+    public void queryEvent_404error() throws Exception {
+        //When
+        this.mockMvc.perform(get("/api/events/1937820"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("이벤트 수정")
+    public void updateEvent() throws Exception{
+        //Given
+        Event event = this.generateEvent(100);
+        EventDTO eventDTO = this.modelMapper.map(event, EventDTO.class);
+        String updatedEvent = "Updated Event";
+        eventDTO.setName(updatedEvent);
+
+        //When
+        this.mockMvc.perform(put("/api/events/{id}", event.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(this.objectMapper.writeValueAsString(eventDTO)))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("name").exists())
+                .andExpect(jsonPath("id").exists())
+                .andExpect(jsonPath("_links.self").exists())
+                .andExpect(jsonPath("_links.profile").exists())
+                .andDo(document("update-event",
+                        links(
+                                linkWithRel("self").description("자신의 링크"),
+                                linkWithRel("profile").description("해당 api에 대한 정보를 얻을 수 있는 링크")
+                        ),
+                        requestHeaders(
+                                headerWithName(HttpHeaders.CONTENT_TYPE).description("request에 대한 contentType header")
+                        ),
+                        responseHeaders(
+                                headerWithName(HttpHeaders.CONTENT_TYPE).description("response에 대한 contentType header")
+                        ),
+                        requestFields(
+                                fieldWithPath("name").description("name of update event request"),
+                                fieldWithPath("description").description("description of update event request"),
+                                fieldWithPath("beginEnrollmentDateTime").description("beginEnrollmentDateTime of update event request"),
+                                fieldWithPath("closeEnrollmentDateTime").description("closeEnrollmentDateTime of update event request"),
+                                fieldWithPath("beginEventDateTime").description("beginEventDateTime of update event request"),
+                                fieldWithPath("endEventDateTime").description("endEventDateTime of update event request"),
+                                fieldWithPath("location").description("location of update event request"),
+                                fieldWithPath("basePrice").description("basePrice of update event request"),
+                                fieldWithPath("maxPrice").description("maxPrice of update event request"),
+                                fieldWithPath("limitOfEnrollment").description("limitOfEnrollment of update event request")
+                        ),
+                        responseFields(
+                                fieldWithPath("id").description("identifier of update event response"),
+                                fieldWithPath("name").description("name of update event response"),
+                                fieldWithPath("description").description("description of update event response"),
+                                fieldWithPath("beginEnrollmentDateTime").description("beginEnrollmentDateTime of update event response"),
+                                fieldWithPath("closeEnrollmentDateTime").description("closeEnrollmentDateTime of update event response"),
+                                fieldWithPath("beginEventDateTime").description("beginEventDateTime of update event response"),
+                                fieldWithPath("endEventDateTime").description("endEventDateTime of update event response"),
+                                fieldWithPath("location").description("location of update event response"),
+                                fieldWithPath("basePrice").description("basePrice of update event response"),
+                                fieldWithPath("maxPrice").description("maxPrice of update event response"),
+                                fieldWithPath("limitOfEnrollment").description("limitOfEnrollment of update event response"),
+                                fieldWithPath("offline").description("offline of update event response"),
+                                fieldWithPath("free").description("free of update event response"),
+                                fieldWithPath("manager").description("manager of update event response"),
+                                fieldWithPath("eventStatus").description("eventStatus of update event response"),
+                                fieldWithPath("_links.self.href").description("self of update event response"),
+                                fieldWithPath("_links.profile.href").description("profile of update event response")
+                        )
+                    ));
+    }
+
+    @Test
+    @DisplayName("입력값이 비어있는 경우 이벤트 수정 실패")
+    public void updateEvent_input_empty_error() throws Exception{
+        //Given
+        Event event = this.generateEvent(100);
+        EventDTO eventDTO = new EventDTO();
+
+        //When
+        this.mockMvc.perform(put("/api/events/{id}", event.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(this.objectMapper.writeValueAsString(eventDTO)))
+                .andDo(print())
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("입력값이 잘못된 경우 이벤트 수정 실패")
+    public void updateEvent_input_error() throws Exception{
+        //Given
+        Event event = this.generateEvent(100);
+        EventDTO eventDTO = this.modelMapper.map(event, EventDTO.class);
+        eventDTO.setBasePrice(20000);
+        eventDTO.setMaxPrice(2000);
+
+        //When
+        this.mockMvc.perform(put("/api/events/{id}", event.getId())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(this.objectMapper.writeValueAsString(eventDTO)))
+                .andDo(print())
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 이벤트 수정 실패")
+    public void updateEvent_notFound() throws Exception{
+        //Given
+        Event event = this.generateEvent(100);
+        EventDTO eventDTO = this.modelMapper.map(event, EventDTO.class);
+
+        //When
+        this.mockMvc.perform(put("/api/events/32180321")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(this.objectMapper.writeValueAsString(eventDTO)))
+                .andDo(print())
+                .andExpect(status().isNotFound());
+    }
+
+    private Event generateEvent(int index){
         Event event = Event.builder()
-                .name("event" + index)
-                .description("test event")
+                .name("한글테스트")
+                .description("REST API Development with Spring")
+                .beginEnrollmentDateTime(LocalDateTime.of(2020, 7, 9, 16, 4))
+                .closeEnrollmentDateTime(LocalDateTime.of(2020, 7, 10, 16, 4))
+                .beginEventDateTime(LocalDateTime.of(2020, 7, 11, 16, 4))
+                .endEventDateTime(LocalDateTime.of(2020, 7, 12, 16, 4))
+                .basePrice(100)
+                .maxPrice(200)
+                .limitOfEnrollment(100)
+                .location("강남역 D2 스타텁 팩토리")
+                .free(false)
+                .offline(true)
+                .eventStatus(EventStatus.DRAFT)
                 .build();
-        this.eventRepository.save(event);
+
+        return this.eventRepository.save(event);
     }
 
 
