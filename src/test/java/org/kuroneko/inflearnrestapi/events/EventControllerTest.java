@@ -22,6 +22,8 @@ import org.springframework.hateoas.MediaTypes;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.common.util.Jackson2JsonParser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
@@ -154,6 +156,7 @@ public class EventControllerTest {
                                 fieldWithPath("offline").description("offline of new event response"),
                                 fieldWithPath("free").description("free of new event response"),
                                 fieldWithPath("manager").description("manager of new event response"),
+                                fieldWithPath("manager.id").description("manager's id of new event response"),
                                 fieldWithPath("eventStatus").description("eventStatus of new event response"),
                                 fieldWithPath("_links.self.href").description("self of new event response"),
                                 fieldWithPath("_links.query-events.href").description("query-events of new event response"),
@@ -165,16 +168,16 @@ public class EventControllerTest {
     }
 
     private String getBearer() throws Exception {
-        return "Bearer " + getAccessToken();
+        return "Bearer " + getAccessToken(true);
+    }
+    private String getBearer(Boolean needToCreateAccount) throws Exception {
+        return "Bearer " + getAccessToken(needToCreateAccount);
     }
 
-    private String getAccessToken() throws Exception {
-        Account account = Account.builder()
-                .email(appProperties.getUserUsername())
-                .password(appProperties.getUserPassword())
-                .roles(Set.of(AccountRole.ADMIN, AccountRole.USER))
-                .build();
-        accountService.savePassword(account);
+    private String getAccessToken(Boolean needToCreateAccount) throws Exception {
+        if (needToCreateAccount) {
+            createAccount();
+        }
 
         ResultActions perform = this.mockMvc.perform(post("/oauth/token")
                 .with(httpBasic(appProperties.getClientId(), appProperties.getClientSecret()))
@@ -185,7 +188,15 @@ public class EventControllerTest {
         String contentAsString = perform.andReturn().getResponse().getContentAsString();
         Jackson2JsonParser jsonParser = new Jackson2JsonParser();
         return jsonParser.parseMap(contentAsString).get("access_token").toString();
+    }
 
+    private Account createAccount() {
+        Account account = Account.builder()
+                .email(appProperties.getUserUsername())
+                .password(appProperties.getUserPassword())
+                .roles(Set.of(AccountRole.ADMIN, AccountRole.USER))
+                .build();
+        return accountService.savePassword(account);
     }
 
     @ParameterizedTest
@@ -296,7 +307,6 @@ public class EventControllerTest {
     public void queryEvents() throws Exception{
         //Given
         IntStream.range(0, 30).forEach(this::generateEvent);
-
         //When
         this.mockMvc.perform(get("/api/events")
                 .param("page", "1")
@@ -354,10 +364,74 @@ public class EventControllerTest {
     }
 
     @Test
+    @DisplayName("30개의 이벤트를 10개씩 두번째 페이지 조회하기")
+    public void queryEventsWithAuthentication() throws Exception{
+        //Given
+        IntStream.range(0, 30).forEach(this::generateEvent);
+
+        //When
+        this.mockMvc.perform(get("/api/events")
+                .header(HttpHeaders.AUTHORIZATION, getBearer())
+                .param("page", "1")
+                .param("size", "10")
+                .param("sort", "name,DESC"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("page").exists())
+                .andExpect(jsonPath("_embedded.eventList[0]._links.self").exists())
+                .andExpect(jsonPath("_links.self").exists())
+                .andExpect(jsonPath("_links.profile").exists())
+                .andExpect(jsonPath("_links.create-event").exists())
+                .andDo(document("query-events",
+                        requestParameters(
+                                parameterWithName("page").description("요청 할 페이지 0 부터 시작"),
+                                parameterWithName("size").description("한 페이지에서 요청할 최대 값"),
+                                parameterWithName("sort").description("페이지 정렬 방식")
+                        ),
+                        responseFields(
+                                beneathPath("_embedded.eventList"),
+                                fieldWithPath("id").description("identifier of query event response"),
+                                fieldWithPath("name").description("name of query event response"),
+                                fieldWithPath("description").description("description of query event response"),
+                                fieldWithPath("beginEnrollmentDateTime").description("beginEnrollmentDateTime of query event response"),
+                                fieldWithPath("closeEnrollmentDateTime").description("closeEnrollmentDateTime of query event response"),
+                                fieldWithPath("beginEventDateTime").description("beginEventDateTime of query event response"),
+                                fieldWithPath("endEventDateTime").description("endEventDateTime of query event response"),
+                                fieldWithPath("location").description("location of query event response"),
+                                fieldWithPath("basePrice").description("basePrice of query event response"),
+                                fieldWithPath("maxPrice").description("maxPrice of query event response"),
+                                fieldWithPath("limitOfEnrollment").description("limitOfEnrollment of query event response"),
+                                fieldWithPath("offline").description("offline of query event response"),
+                                fieldWithPath("free").description("free of query event response"),
+                                fieldWithPath("manager").description("manager of query event response"),
+                                fieldWithPath("eventStatus").description("eventStatus of query event response"),
+                                fieldWithPath("_links.self.href").description("self of query event response")
+                        ),
+                        responseFields(
+                                beneathPath("page"),
+                                fieldWithPath("size").description("한 페이지내에서 표시 가능한 속성의 최대 갯수"),
+                                fieldWithPath("totalElements").description("속성의 최대 갯수"),
+                                fieldWithPath("totalPages").description("총 페이지"),
+                                fieldWithPath("number").description("현재 페이지")
+                        ),
+                        links(
+                                linkWithRel("first").description("첫 페이지"),
+                                linkWithRel("next").description("다음 페이지"),
+                                linkWithRel("self").description("현재 페이지"),
+                                linkWithRel("prev").description("이전 페이지"),
+                                linkWithRel("last").description("마지막 페이지"),
+                                linkWithRel("profile").description("profile to link"),
+                                linkWithRel("create-event").description("create-event to link")
+                        )
+                ));
+    }
+
+    @Test
     @DisplayName("이벤트 한개 조회")
     public void queryEvent() throws Exception{
         //Given
-        Event event = this.generateEvent(100);
+        Account account = this.createAccount();
+        Event event = this.generateEvent(100, account);
 
         //When
         this.mockMvc.perform(get("/api/events/{id}", event.getId()))
@@ -382,14 +456,15 @@ public class EventControllerTest {
     @DisplayName("이벤트 수정")
     public void updateEvent() throws Exception{
         //Given
-        Event event = this.generateEvent(100);
+        Account account = this.createAccount();
+        Event event = this.generateEvent(100, account);
         EventDTO eventDTO = this.modelMapper.map(event, EventDTO.class);
         String updatedEvent = "Updated Event";
         eventDTO.setName(updatedEvent);
 
         //When
         this.mockMvc.perform(put("/api/events/{id}", event.getId())
-                .header(HttpHeaders.AUTHORIZATION, getBearer())
+                .header(HttpHeaders.AUTHORIZATION, getBearer(false))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(this.objectMapper.writeValueAsString(eventDTO)))
                 .andDo(print())
@@ -436,6 +511,7 @@ public class EventControllerTest {
                                 fieldWithPath("offline").description("offline of update event response"),
                                 fieldWithPath("free").description("free of update event response"),
                                 fieldWithPath("manager").description("manager of update event response"),
+                                fieldWithPath("manager.id").description("manager's id of update event response"),
                                 fieldWithPath("eventStatus").description("eventStatus of update event response"),
                                 fieldWithPath("_links.self.href").description("self of update event response"),
                                 fieldWithPath("_links.profile.href").description("profile of update event response")
@@ -493,24 +569,35 @@ public class EventControllerTest {
                 .andExpect(status().isNotFound());
     }
 
-    private Event generateEvent(int index){
-        Event event = Event.builder()
-                .name("한글테스트")
-                .description("REST API Development with Spring")
-                .beginEnrollmentDateTime(LocalDateTime.of(2020, 7, 9, 16, 4))
-                .closeEnrollmentDateTime(LocalDateTime.of(2020, 7, 10, 16, 4))
-                .beginEventDateTime(LocalDateTime.of(2020, 7, 11, 16, 4))
-                .endEventDateTime(LocalDateTime.of(2020, 7, 12, 16, 4))
-                .basePrice(100)
-                .maxPrice(200)
-                .limitOfEnrollment(100)
-                .location("강남역 D2 스타텁 팩토리")
-                .free(false)
-                .offline(true)
-                .eventStatus(EventStatus.DRAFT)
-                .build();
+    private Event generateEvent(int index, Account account){
+        Event event = buildEvent();
+        event.setManager(account);
 
         return this.eventRepository.save(event);
+    }
+
+    private Event generateEvent(int index){
+        Event event = buildEvent();
+
+        return this.eventRepository.save(event);
+    }
+
+    private Event buildEvent() {
+        return Event.builder()
+                    .name("한글테스트")
+                    .description("REST API Development with Spring")
+                    .beginEnrollmentDateTime(LocalDateTime.of(2020, 7, 9, 16, 4))
+                    .closeEnrollmentDateTime(LocalDateTime.of(2020, 7, 10, 16, 4))
+                    .beginEventDateTime(LocalDateTime.of(2020, 7, 11, 16, 4))
+                    .endEventDateTime(LocalDateTime.of(2020, 7, 12, 16, 4))
+                    .basePrice(100)
+                    .maxPrice(200)
+                    .limitOfEnrollment(100)
+                    .location("강남역 D2 스타텁 팩토리")
+                    .free(false)
+                    .offline(true)
+                    .eventStatus(EventStatus.DRAFT)
+                    .build();
     }
 
 

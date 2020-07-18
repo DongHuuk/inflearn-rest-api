@@ -1,7 +1,9 @@
 package org.kuroneko.inflearnrestapi.events;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import lombok.*;
 import org.kuroneko.inflearnrestapi.account.Account;
+import org.kuroneko.inflearnrestapi.account.AccountSerializer;
 
 import javax.persistence.*;
 import java.time.LocalDateTime;
@@ -27,6 +29,7 @@ public class Event {
     private boolean free;
 
     @ManyToOne
+    @JsonSerialize(using = AccountSerializer.class)
     private Account manager;
     @Enumerated(EnumType.STRING) @Builder.Default
     private EventStatus eventStatus = EventStatus.DRAFT;

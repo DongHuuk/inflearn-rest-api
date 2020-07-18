@@ -32,7 +32,7 @@ public class AccountService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         Account account = this.accountRepository.findByEmail(email).orElseThrow(() -> new UsernameNotFoundException(email));
 
-        return new User(account.getEmail(), account.getPassword(), authorities(account.getRoles()));
+        return new AccountAdapter(account);
     }
 
     private Collection<? extends GrantedAuthority> authorities(Set<AccountRole> roles) {
