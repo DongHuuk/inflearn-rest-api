@@ -28,7 +28,7 @@ public class Event {
 
     @ManyToOne
     private Account manager;
-    @Enumerated(EnumType.STRING)
+    @Enumerated(EnumType.STRING) @Builder.Default
     private EventStatus eventStatus = EventStatus.DRAFT;
 
     public void freeUpdate() {

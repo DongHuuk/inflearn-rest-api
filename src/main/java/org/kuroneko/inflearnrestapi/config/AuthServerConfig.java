@@ -1,6 +1,7 @@
 package org.kuroneko.inflearnrestapi.config;
 
 import org.kuroneko.inflearnrestapi.account.AccountService;
+import org.kuroneko.inflearnrestapi.commons.AppProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -24,6 +25,8 @@ public class AuthServerConfig extends AuthorizationServerConfigurerAdapter {
     PasswordEncoder passwordEncoder;
     @Autowired
     AuthenticationManager authenticationManager;
+    @Autowired
+    AppProperties appProperties;
 
     @Override
     public void configure(AuthorizationServerSecurityConfigurer security) throws Exception {
@@ -34,8 +37,8 @@ public class AuthServerConfig extends AuthorizationServerConfigurerAdapter {
     @Override
     public void configure(ClientDetailsServiceConfigurer clients) throws Exception {
         clients.inMemory()
-                .withClient("MyApp")
-                .secret(this.passwordEncoder.encode("pass"))
+                .withClient(appProperties.getClientId())
+                .secret(this.passwordEncoder.encode(appProperties.getClientSecret()))
                 .authorizedGrantTypes("password", "refresh_token")
                 .scopes("read", "write")
                 .accessTokenValiditySeconds(10 * 60)

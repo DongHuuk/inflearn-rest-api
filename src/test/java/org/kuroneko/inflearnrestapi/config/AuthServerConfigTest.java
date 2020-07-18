@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.kuroneko.inflearnrestapi.account.Account;
 import org.kuroneko.inflearnrestapi.account.AccountRole;
 import org.kuroneko.inflearnrestapi.account.AccountService;
+import org.kuroneko.inflearnrestapi.commons.AppProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,27 +32,17 @@ class AuthServerConfigTest {
     MockMvc mockMvc;
     @Autowired
     AccountService accountService;
+    @Autowired
+    AppProperties appProperties;
 
     @Test
     @DisplayName("인증 토큰을 발급 받는 테스트")
     public void getAuthToken() throws Exception {
-        String client_Id = "MyApp";
-        String password = "pass";
-        String client_Secret = password;
-        String username = "kuroneko@test.com";
-
-        Account account = Account.builder()
-                .email(username)
-                .password(password)
-                .roles(Set.of(AccountRole.ADMIN, AccountRole.USER))
-                .build();
-        accountService.savePassword(account);
-
         this.mockMvc.perform(post("/oauth/token")
-                .with(httpBasic(client_Id, client_Secret))
+                .with(httpBasic(appProperties.getClientId(), appProperties.getClientSecret()))
                 .param("grant_type", "password")
-                .param("username", username)
-                .param("password", password))
+                .param("username", appProperties.getUserUsername())
+                .param("password", appProperties.getUserPassword()))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("access_token").exists());
